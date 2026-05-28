@@ -1,0 +1,30 @@
+# Repo-wide ignores. Subproject .gitignores cover their own specifics
+# (node_modules, dist, .env, etc.).
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# Temp / logs / caches
+*.log
+*.tmp
+.cache/
+
+# Local artifacts you might generate during testing
+*.local
+*.bak
+
+# Claude Code internal state — keep CLAUDE.md & .claude/launch.json committed
+# but ignore anything else under .claude/ that's session-specific
+.claude/sessions/
+.claude/cache/
+
+Polashi.pdf

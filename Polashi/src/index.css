@@ -1,0 +1,1094 @@
+/* ── Reset & Base ─────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Self-hosted Tiro Bangla — scoped to Bengali script via unicode-range so it
+   ONLY renders Bengali characters. Latin glyphs continue to use Inter / system.
+   Files installed via @fontsource/tiro-bangla (see package.json), copied to
+   public/fonts/ so Vite serves them directly. */
+@font-face {
+  font-family: "Tiro Bangla";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    url("/fonts/tiro-bangla-bengali.woff2") format("woff2"),
+    url("/fonts/tiro-bangla-bengali.woff") format("woff");
+  /* Bengali block + ZWJ/ZWNJ + dotted circle (used for orphan vowel signs) */
+  unicode-range: U+0980-09FF, U+200C-200D, U+25CC;
+}
+
+body {
+  /* Tiro Bangla is first so the browser uses it for Bengali characters; for
+     every other character it falls through to Inter / system. */
+  font-family:
+    "Tiro Bangla", "Inter", "Noto Sans Bengali", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* Avoid double-tap-to-zoom delay on touch devices */
+  touch-action: manipulation;
+  /* Prevent pull-to-refresh interrupting the game (still scrollable inside) */
+  overscroll-behavior-y: contain;
+}
+
+/* Friendly tap-highlight defaults everywhere */
+button, [role="button"], .player-chip, .seat, .mission-dot, .toggle-option {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+input {
+  font-family: inherit;
+  outline: none;
+}
+
+/* ── Theme Variables ──────────────────────────────────────────────────────── */
+:root {
+  --bg: #0d1117;
+  --bg-surface: #161b22;
+  --bg-elevated: #21262d;
+  --border: #30363d;
+  --primary: #5b8dd9;
+  --primary-dim: #2d4a7a;
+  --text: #e2e8f0;
+  --text-muted: #8b949e;
+  --loyal: #3fb950;
+  --loyal-dim: #1a4027;
+  --traitor: #f85149;
+  --traitor-dim: #4a1515;
+  --gold: #e3b341;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+[data-mode="polashi"] {
+  --bg: #110c04;
+  --bg-surface: #1e1408;
+  --bg-elevated: #2a1e0e;
+  --border: #3d2e14;
+  --primary: #c4963a;
+  --primary-dim: #5a3d10;
+  --text: #f5e6c8;
+  --text-muted: #9c8060;
+}
+
+/* ── Typography ───────────────────────────────────────────────────────────── */
+.bengali {
+  font-family: "Noto Sans Bengali", system-ui, sans-serif;
+}
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+}
+
+/* ── Layout ───────────────────────────────────────────────────────────────── */
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Safe-area-aware padding so iOS notch / Android nav bar never cover the UI */
+  padding-top:    max(16px, env(safe-area-inset-top));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  padding-left:   max(16px, env(safe-area-inset-left));
+  padding-right:  max(16px, env(safe-area-inset-right));
+}
+
+/* Mobile-first centered column. Grows modestly on larger devices but never
+   gets so wide that the game feels stretched out on a desktop monitor. */
+.container {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+@media (min-width: 640px)  { .container { max-width: 520px; } }
+@media (min-width: 1024px) { .container { max-width: 560px; } }
+
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.card-elevated {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  /* Apple HIG min touch target = 44px. Material = 48px. Pick 44 as floor. */
+  min-height: 44px;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  transition:
+    opacity 0.15s,
+    transform 0.1s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.btn-outline {
+  background: transparent;
+  color: var(--text);
+  border: 1.5px solid var(--border);
+}
+.btn-outline:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.btn-loyal {
+  background: var(--loyal);
+  color: #0d1117;
+}
+.btn-loyal:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.btn-traitor {
+  background: var(--traitor);
+  color: #fff;
+}
+.btn-traitor:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 8px 16px;
+  font-size: 0.875rem;
+}
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text);
+}
+.btn-full {
+  width: 100%;
+}
+.btn-lg {
+  padding: 16px 32px;
+  font-size: 1.125rem;
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────────────── */
+.input {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 12px 16px;
+  font-size: 1rem;
+  transition: border-color 0.15s;
+}
+.input:focus {
+  border-color: var(--primary);
+}
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Toggle group ─────────────────────────────────────────────────────────── */
+.toggle-group {
+  display: flex;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.toggle-option {
+  flex: 1;
+  padding: 10px;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  user-select: none;
+}
+.toggle-option.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ── Badges ───────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-loyal {
+  background: var(--loyal-dim);
+  color: var(--loyal);
+}
+.badge-traitor {
+  background: var(--traitor-dim);
+  color: var(--traitor);
+}
+.badge-neutral {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+/* ── Player chips ─────────────────────────────────────────────────────────── */
+.player-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--border);
+  border-radius: 99px;
+  font-size: 0.875rem;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.player-chip.selected {
+  border-color: var(--primary);
+  background: var(--primary-dim);
+}
+.player-chip.is-leader {
+  border-color: var(--gold);
+}
+.player-chip.is-me {
+  border-color: var(--primary);
+}
+.player-chip.traitor {
+  border-color: var(--traitor);
+  background: var(--traitor-dim);
+}
+.player-chip.loyal {
+  border-color: var(--loyal);
+  background: var(--loyal-dim);
+}
+.player-chip.clickable {
+  cursor: pointer;
+}
+.player-chip.clickable:hover {
+  border-color: var(--primary);
+}
+
+.player-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary-dim);
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* ── Mission tracker ──────────────────────────────────────────────────────── */
+.mission-track {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.mission-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 2px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  transition: all 0.2s;
+}
+.mission-dot.current {
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+.mission-dot.loyal {
+  background: var(--loyal);
+  border-color: var(--loyal);
+  color: #0d1117;
+}
+.mission-dot.traitor {
+  background: var(--traitor);
+  border-color: var(--traitor);
+  color: #fff;
+}
+.mission-dot.clickable { cursor: pointer; }
+.mission-dot.clickable:hover {
+  transform: scale(1.1);
+  filter: brightness(1.1);
+}
+.mission-dot.clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── Rejection counter panel ──────────────────────────────────────────────── */
+.rejection-panel {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.rejection-panel.warn {
+  border-color: var(--gold);
+  background: rgba(227, 179, 65, 0.08);
+}
+.rejection-panel.danger {
+  border-color: var(--traitor);
+  background: rgba(248, 81, 73, 0.12);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+.rejection-track {
+  display: flex;
+  gap: 6px;
+}
+.rejection-pip {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.rejection-pip.filled {
+  background: var(--traitor);
+  border-color: var(--traitor);
+}
+
+/* ── Role card ────────────────────────────────────────────────────────────── */
+.role-card {
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  border: 2px solid var(--border);
+  background: var(--bg-surface);
+}
+.role-card.team-loyal {
+  border-color: var(--loyal);
+  background: linear-gradient(135deg, var(--bg-surface), var(--loyal-dim));
+}
+.role-card.team-traitor {
+  border-color: var(--traitor);
+  background: linear-gradient(135deg, var(--bg-surface), var(--traitor-dim));
+}
+.role-icon {
+  font-size: 3rem;
+  margin-bottom: 8px;
+}
+.role-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.role-title {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+.role-desc {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* ── Overlays ─────────────────────────────────────────────────────────────── */
+.dark-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+/* ── Utility ──────────────────────────────────────────────────────────────── */
+.text-center {
+  text-align: center;
+}
+.text-muted {
+  color: var(--text-muted);
+}
+.text-loyal {
+  color: var(--loyal);
+}
+.text-traitor {
+  color: var(--traitor);
+}
+.text-gold {
+  color: var(--gold);
+}
+.text-primary {
+  color: var(--primary);
+}
+.text-sm {
+  font-size: 0.875rem;
+}
+.text-xs {
+  font-size: 0.75rem;
+}
+.text-lg {
+  font-size: 1.125rem;
+}
+.text-xl {
+  font-size: 1.25rem;
+}
+.text-2xl {
+  font-size: 1.5rem;
+}
+.font-bold {
+  font-weight: 700;
+}
+.font-semi {
+  font-weight: 600;
+}
+.flex {
+  display: flex;
+}
+.flex-col {
+  flex-direction: column;
+}
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gap-2 {
+  gap: 8px;
+}
+.gap-3 {
+  gap: 12px;
+}
+.gap-4 {
+  gap: 16px;
+}
+.gap-6 {
+  gap: 24px;
+}
+.items-center {
+  align-items: center;
+}
+.justify-between {
+  justify-content: space-between;
+}
+.flex-wrap {
+  flex-wrap: wrap;
+}
+.w-full {
+  width: 100%;
+}
+.mt-2 {
+  margin-top: 8px;
+}
+.mt-3 {
+  margin-top: 12px;
+}
+.mt-4 {
+  margin-top: 16px;
+}
+.mt-6 {
+  margin-top: 24px;
+}
+.mb-2 {
+  margin-bottom: 8px;
+}
+.mb-4 {
+  margin-bottom: 16px;
+}
+.p-4 {
+  padding: 16px;
+}
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+.scroll-y {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Special UI ───────────────────────────────────────────────────────────── */
+.room-code {
+  /* Scales with viewport — readable on a 320px phone, nicely large on tablet */
+  font-size: clamp(1.4rem, 6vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--primary);
+  font-family: "Courier New", monospace;
+  background: var(--bg-elevated);
+  border: 2px dashed var(--primary-dim);
+  border-radius: var(--radius-sm);
+  padding: 12px 24px;
+  text-align: center;
+  /* Prevent overflow on tiny screens */
+  word-break: break-all;
+}
+
+.conn-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: var(--traitor);
+  color: #fff;
+  text-align: center;
+  padding: 8px;
+  /* Push below iOS notch / status bar */
+  padding-top: max(8px, env(safe-area-inset-top));
+  font-size: 0.875rem;
+  font-weight: 600;
+  z-index: 1000;
+}
+
+.vote-bar {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+  margin-top: 8px;
+}
+.vote-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--loyal);
+  transition: width 0.4s ease;
+}
+
+/* ── Animations ───────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Generic responsive modal — shared by every modal in the app. Backdrop
+   centers content, leaves safe-area padding, and lets tall content scroll
+   inside the overlay instead of overflowing the viewport. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  padding-top:    max(16px, env(safe-area-inset-top));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.15s ease-out;
+}
+.modal-content {
+  width: 100%;
+  max-width: 380px;
+  max-height: 100%;
+  overflow-y: auto;
+  position: relative;
+  animation: popIn 0.25s ease-out;
+}
+
+@keyframes flicker {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-1deg);
+  }
+  25% {
+    opacity: 0.85;
+    transform: scale(1.05) rotate(1deg);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(0.98) rotate(-0.5deg);
+  }
+  75% {
+    opacity: 0.8;
+    transform: scale(1.02) rotate(0.5deg);
+  }
+}
+.flicker {
+  animation: flicker 2.5s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+.drift {
+  animation: drift 3.5s ease-in-out infinite;
+}
+
+/* Toast slide-in (top → settle) */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.toast-in { animation: toastIn 0.25s ease-out; }
+
+/* ── Night Table (circular board-game layout) ─────────────────────────────── */
+.night-table-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+}
+/* Circle sized via the SMALLER of viewport width and height so it always
+   fits — phones in landscape have very short vertical space. */
+.night-table {
+  position: relative;
+  width: min(100%, 90vh, 460px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 45%,
+    #3a2616 0%,
+    #1f140a 55%,
+    #0a0703 100%
+  );
+  border: 6px solid #5a3a1f;
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.6),
+    inset 0 0 60px rgba(255, 170, 70, 0.06),
+    inset 0 0 4px rgba(255, 200, 120, 0.15);
+}
+.night-table-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64%;
+  max-width: 230px;
+  text-align: center;
+  pointer-events: none;
+}
+.night-table-instruction {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #d8c8a8;
+  font-weight: 600;
+  line-height: 1.35;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+.night-table-step {
+  margin-top: 6px;
+  font-size: 0.65rem;
+  color: #8a7860;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.seat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 68px;
+  text-align: center;
+}
+.seat-avatar {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  transition: all 0.35s ease;
+}
+.seat-eye {
+  position: absolute;
+  bottom: -6px;
+  right: -8px;
+  font-size: 0.95rem;
+  background: rgba(10, 10, 12, 0.85);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  filter: grayscale(0.4);
+}
+.seat-name {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: #c8bca0;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Closed eyes: dimmed avatar */
+.seat-closed .seat-avatar {
+  opacity: 0.55;
+  filter: grayscale(0.7);
+}
+/* Open eyes: bright avatar + soft glow */
+.seat-open .seat-avatar {
+  color: var(--text);
+  border-color: var(--primary);
+  box-shadow: 0 0 14px rgba(91, 141, 217, 0.5);
+}
+.seat-open .seat-eye {
+  filter: none;
+  background: rgba(255, 240, 200, 0.95);
+  border-color: #c9a657;
+}
+
+/* "You" — always slightly highlighted with a soft ring */
+.seat-me .seat-avatar {
+  outline: 2px dashed rgba(255, 220, 150, 0.5);
+  outline-offset: 3px;
+}
+
+/* Disconnected players — fade them but keep them in the layout so they can
+   reconnect into the same seat. */
+.seat-disconnected .seat-avatar {
+  opacity: 0.4;
+  filter: grayscale(0.85);
+}
+.seat-disconnected .seat-name {
+  opacity: 0.6;
+  font-style: italic;
+}
+.player-chip.is-disconnected {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+}
+
+/* Leader's clickable seats during team proposal — gentle hover affordance */
+.seat-clickable:hover .seat-avatar {
+  transform: scale(1.08);
+  border-color: var(--primary);
+  box-shadow: 0 0 14px rgba(91, 141, 217, 0.5);
+}
+.seat-clickable .seat-avatar { transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.2s ease; }
+
+/* Other players whose eyes/thumbs are visible to me (revealed by the night
+   call-out). Make these POP — full opacity, strong multi-layer glow, soft
+   pulse so they catch the eye even at a glance. */
+.seat-reveal .seat-avatar {
+  /* Critical: undo the .seat-closed dimming so the avatar reads brightly.
+     A revealed-but-eyes-closed teammate (e.g. Minion raising thumb for Merlin)
+     was previously rendered at 55% opacity + grayscale, hiding the glow. */
+  opacity: 1;
+  filter: none;
+  animation: seat-glow 2s ease-in-out infinite;
+}
+.seat-reveal.seat-traitor .seat-avatar {
+  border-color: var(--traitor);
+  background: rgba(160, 35, 35, 0.85);
+  color: #fff;
+  box-shadow:
+    0 0 0 3px rgba(248, 81, 73, 0.45),
+    0 0 24px 4px rgba(248, 81, 73, 0.7),
+    0 0 48px 8px rgba(248, 81, 73, 0.35);
+}
+.seat-reveal.seat-loyal .seat-avatar {
+  border-color: var(--loyal);
+  background: rgba(40, 110, 55, 0.85);
+  color: #fff;
+  box-shadow:
+    0 0 0 3px rgba(63, 185, 80, 0.45),
+    0 0 24px 4px rgba(63, 185, 80, 0.65),
+    0 0 48px 8px rgba(63, 185, 80, 0.3);
+}
+.seat-reveal.seat-neutral .seat-avatar {
+  border-color: #d6b56b;
+  background: rgba(120, 90, 30, 0.75);
+  color: #fff;
+  box-shadow:
+    0 0 0 3px rgba(214, 181, 107, 0.45),
+    0 0 24px 4px rgba(214, 181, 107, 0.6),
+    0 0 48px 8px rgba(214, 181, 107, 0.3);
+}
+/* Percival's Merlin/Morgana candidates — distinct purple-gold glow */
+.seat-reveal.seat-candidate .seat-avatar {
+  border-color: #c9a657;
+  background: rgba(95, 55, 120, 0.85);
+  color: #fff;
+  box-shadow:
+    0 0 0 3px rgba(201, 166, 87, 0.5),
+    0 0 24px 4px rgba(201, 166, 87, 0.6),
+    0 0 48px 8px rgba(170, 120, 220, 0.5);
+}
+
+@keyframes seat-glow {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+
+/* When a seat is revealed, make the thumb badge larger and warmer so it
+   reads even on small screens. */
+.seat-reveal .seat-thumb {
+  font-size: 1.45rem;
+  filter: drop-shadow(0 2px 6px rgba(255, 200, 100, 1));
+}
+.seat-reveal.seat-candidate .seat-eye {
+  background: rgba(255, 235, 180, 0.9);
+  border-color: #c9a657;
+}
+/* Subtle "?" marker on candidates so the mystery reads instantly */
+.seat-reveal.seat-candidate .seat-avatar::before {
+  content: "?";
+  position: absolute;
+  top: -10px;
+  left: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d6b56b, #b58cd6);
+  color: #1a0d05;
+  font-weight: 800;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 220, 150, 0.5);
+  box-shadow: 0 0 8px rgba(201, 166, 87, 0.5);
+}
+
+/* ── Voting table states (reuses .seat geometry) ──────────────────────────── */
+/* On proposed team — crossed-swords marker badge floats next to the avatar
+   instead of a glow, so it survives even when the vote-result color takes over. */
+.seat-team-marker {
+  position: absolute;
+  top: -10px;
+  right: -12px;
+  width: 28px;
+  height: 28px;
+  z-index: 2;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+  user-select: none;
+}
+/* Leader crown badge */
+.seat-crown {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.95rem;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+}
+/* Raised thumb badge — shown on seats currently identifying themselves
+   (e.g. Minions before Merlin's reveal, Merlin+Morgana before Percival's). */
+.seat-thumb {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.15rem;
+  filter: drop-shadow(0 1px 3px rgba(255, 200, 100, 0.8));
+  animation: pulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 3;
+}
+/* Pending vote state */
+.seat-voted-pending .seat-eye {
+  background: var(--loyal);
+  border-color: var(--loyal);
+  color: #fff;
+  font-weight: 700;
+  filter: none;
+}
+.seat-not-voted .seat-avatar {
+  opacity: 0.55;
+}
+.seat-not-voted .seat-eye {
+  background: rgba(60, 60, 60, 0.85);
+  color: #aaa;
+}
+/* Revealed vote outcomes — green glow for approve, red for reject */
+.seat-vote-approve .seat-avatar {
+  border-color: var(--loyal);
+  box-shadow: 0 0 18px rgba(63, 185, 80, 0.7);
+  background: rgba(30, 80, 40, 0.55);
+  color: #fff;
+}
+.seat-vote-approve .seat-eye {
+  background: var(--loyal);
+  border-color: var(--loyal);
+  filter: none;
+}
+.seat-vote-reject .seat-avatar {
+  border-color: var(--traitor);
+  box-shadow: 0 0 18px rgba(248, 81, 73, 0.7);
+  background: rgba(110, 30, 30, 0.55);
+  color: #fff;
+}
+.seat-vote-reject .seat-eye {
+  background: var(--traitor);
+  border-color: var(--traitor);
+  filter: none;
+}
+/* (no extra avatar styling needed when on-team + vote revealed — the marker
+   badge floats above the avatar and stays visible regardless of vote color) */
+
+/* Voted but direction is secret (REVEAL_INDIVIDUAL_VOTES=false) — neutral
+   gold badge, no green/red coloring */
+.seat-voted-secret .seat-avatar {
+  border-color: #8a7860;
+  box-shadow: 0 0 10px rgba(138, 120, 96, 0.4);
+}
+.seat-voted-secret .seat-eye {
+  background: #c9a657;
+  border-color: #c9a657;
+  color: #1a0d05;
+  font-weight: 700;
+  filter: none;
+}
+
+/* ── Responsive seat sizing ────────────────────────────────────────────────
+   Three tiers:
+     • Default (≤ 380px not matched yet): 48px avatar — phones from 380-639px
+     • Small phones (≤ 380px): 40px avatar
+     • Tiny phones (≤ 320px): 36px avatar
+     • Tablets / desktop (≥ 640px): 56px avatar — more breathing room       */
+@media (max-width: 380px) {
+  .seat { width: 56px; }
+  .seat-avatar { width: 40px; height: 40px; font-size: 0.8rem; }
+  .seat-eye { width: 18px; height: 18px; font-size: 0.8rem; }
+  .seat-name { font-size: 0.65rem; }
+  .seat-crown { font-size: 0.8rem; top: -12px; }
+  .seat-team-marker { width: 22px; height: 22px; top: -8px; right: -9px; }
+  .seat-thumb { font-size: 0.95rem; top: -10px; }
+  .night-table-instruction { font-size: 0.72rem; }
+}
+@media (max-width: 320px) {
+  .seat { width: 52px; }
+  .seat-avatar { width: 36px; height: 36px; font-size: 0.72rem; }
+  .seat-eye { width: 16px; height: 16px; font-size: 0.7rem; }
+  .seat-name { font-size: 0.6rem; }
+  .seat-team-marker { width: 18px; height: 18px; top: -6px; right: -7px; }
+  .night-table-instruction { font-size: 0.66rem; }
+  .night-table-step { font-size: 0.55rem; }
+}
+@media (min-width: 640px) {
+  .seat { width: 78px; }
+  .seat-avatar { width: 56px; height: 56px; font-size: 1rem; }
+  .seat-eye { width: 24px; height: 24px; font-size: 1rem; }
+  .seat-name { font-size: 0.8rem; }
+  .seat-crown { font-size: 1.1rem; top: -16px; }
+  .seat-team-marker { width: 32px; height: 32px; top: -12px; right: -14px; }
+  .seat-thumb { font-size: 1.3rem; top: -18px; }
+  .night-table-instruction { font-size: 0.9rem; }
+}
+
+/* Landscape phones — very short viewports. Compress vertical spacing so the
+   table + buttons fit without scrolling. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .page { padding-top: 8px; padding-bottom: 8px; }
+  .card { padding: 12px; }
+  .night-table-wrap { padding: 4px; }
+  .btn-lg { padding: 10px 20px; font-size: 1rem; }
+}
