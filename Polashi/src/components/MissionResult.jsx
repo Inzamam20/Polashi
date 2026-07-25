@@ -20,7 +20,7 @@ export default function MissionResult() {
 
   const handleContinue = () => {
     setLoading(true)
-    advanceFromMissionResult(roomState.code, (res) => {
+    advanceFromMissionResult(roomState.code, () => {
       setLoading(false)
     })
   }

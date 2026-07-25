@@ -51,6 +51,31 @@ function syncRoom(io, code) {
   scheduleAfkCheck(io, code);
 }
 
+/**
+ * Register a socket event with a hardened wrapper:
+ *   • Normalizes the payload so a non-object (null / string / omitted) can't
+ *     throw on destructure — that would be an UNCAUGHT exception and, since
+ *     all state is in-memory, would take down every active room at once.
+ *   • Handles clients that send only a callback (no payload).
+ *   • try/catches the handler so a bug in one action can't kill the process;
+ *     the offending client just gets a generic error.
+ */
+function safeOn(socket, event, handler) {
+  socket.on(event, (rawPayload, rawCb) => {
+    let payload = rawPayload;
+    let cb = rawCb;
+    if (typeof payload === 'function') { cb = payload; payload = undefined; }
+    if (!payload || typeof payload !== 'object') payload = {};
+    const callback = typeof cb === 'function' ? cb : undefined;
+    try {
+      handler(payload, callback);
+    } catch (err) {
+      console.error(`[socket:${event}] handler error:`, err);
+      callback?.({ error: 'Server error' });
+    }
+  });
+}
+
 function registerHandlers(io, socket) {
   // Per-tab identity from the client. Allows the same human to reconnect
   // after a refresh / brief drop and resume their seat.
@@ -58,7 +83,7 @@ function registerHandlers(io, socket) {
 
   // ─── Room management ────────────────────────────────────────────────────
 
-  socket.on('room:create', ({ playerName, gameMode }, cb) => {
+  safeOn(socket, 'room:create', ({ playerName, gameMode }, cb) => {
     if (!playerName?.trim()) return cb?.({ error: 'Name required' });
 
     const { code } = createRoom(socket.id, clientId, playerName.trim(), gameMode);
@@ -67,7 +92,7 @@ function registerHandlers(io, socket) {
     cb?.({ ok: true, code });
   });
 
-  socket.on('room:join', ({ code, playerName }, cb) => {
+  safeOn(socket, 'room:join', ({ code, playerName }, cb) => {
     if (!code || !playerName?.trim()) return cb?.({ error: 'Code and name required' });
 
     const upper = code.toUpperCase();
@@ -87,7 +112,7 @@ function registerHandlers(io, socket) {
     cb?.({ ok: true, reconnected: !!result.reconnected });
   });
 
-  socket.on('room:update_settings', ({ code, settings }, cb) => {
+  safeOn(socket, 'room:update_settings', ({ code, settings }, cb) => {
     const result = updateRoomSettings(code, socket.id, settings);
     if (result.error) return cb?.({ error: result.error });
     syncRoom(io, code);
@@ -109,7 +134,13 @@ function registerHandlers(io, socket) {
 
     cb?.({ ok: true, state: pub, reconnected: didReattach });
     socket.emit('room:state', pub);
-    socket.join(upper);
+
+    // Only subscribe this socket to the room's broadcasts if it's an ACTUAL
+    // player (host / joined / just-reattached). A visitor previewing an invite
+    // link gets the one-time snapshot above, but is NOT joined to the room —
+    // so a non-player can never receive ongoing state or be treated as seated.
+    const isPlayer = pub.players.some(p => p.id === socket.id);
+    if (isPlayer) socket.join(upper);
 
     // Only broadcast "back online" + re-sync when an actual reattach happened.
     // A no-op re-query (same socketId, already connected) skips this so we
@@ -127,14 +158,14 @@ function registerHandlers(io, socket) {
 
   // ─── Game lifecycle ──────────────────────────────────────────────────────
 
-  socket.on('game:start', ({ code }, cb) => {
+  safeOn(socket, 'game:start', ({ code }, cb) => {
     const result = startGame(code, socket.id);
     if (result.error) return cb?.({ error: result.error });
     syncRoom(io, code);
     cb?.({ ok: true });
   });
 
-  socket.on('game:advance_night', ({ code }, cb) => {
+  safeOn(socket, 'game:advance_night', ({ code }, cb) => {
     const result = roomAdvanceFromNight(code, socket.id);
     if (result.error) return cb?.({ error: result.error });
     syncRoom(io, code);
@@ -142,13 +173,13 @@ function registerHandlers(io, socket) {
   });
 
   // Host relays night phase step to all players — steps are cosmetic/UX only
-  socket.on('game:night_step', ({ code, step }) => {
+  safeOn(socket, 'game:night_step', ({ code, step }) => {
     const room = getRoomByCode(code);
     if (!room || room.hostId !== socket.id) return;
     io.to(code).emit('night:step', { step });
   });
 
-  socket.on('game:advance_mission_result', ({ code }, cb) => {
+  safeOn(socket, 'game:advance_mission_result', ({ code }, cb) => {
     const result = roomAdvanceFromMissionResult(code, socket.id);
     if (result.error) return cb?.({ error: result.error });
     syncRoom(io, code);
@@ -158,7 +189,7 @@ function registerHandlers(io, socket) {
   // Leader broadcasts their team selection in progress (no game-state change).
   // Lets other players see the team marker appear/disappear LIVE before the
   // leader confirms. Only the current leader may emit this.
-  socket.on('game:team_preview', ({ code, proposedTeam }) => {
+  safeOn(socket, 'game:team_preview', ({ code, proposedTeam }) => {
     const room = getRoomByCode(code);
     if (!room?.game) return;
     if (room.game.phase !== GAME_PHASES.TEAM_PROPOSAL) return;
@@ -174,14 +205,14 @@ function registerHandlers(io, socket) {
 
   // ─── Gameplay ────────────────────────────────────────────────────────────
 
-  socket.on('game:propose_team', ({ code, proposedTeam }, cb) => {
+  safeOn(socket, 'game:propose_team', ({ code, proposedTeam }, cb) => {
     const result = roomProposeTeam(code, socket.id, proposedTeam);
     if (result.error) return cb?.({ error: result.error });
     syncRoom(io, code);
     cb?.({ ok: true });
   });
 
-  socket.on('game:vote', ({ code, approve }, cb) => {
+  safeOn(socket, 'game:vote', ({ code, approve }, cb) => {
     const result = roomSubmitVote(code, socket.id, approve);
     if (result.error) return cb?.({ error: result.error });
     syncRoom(io, code);
@@ -198,21 +229,21 @@ function registerHandlers(io, socket) {
     }
   });
 
-  socket.on('game:mission_card', ({ code, card }, cb) => {
+  safeOn(socket, 'game:mission_card', ({ code, card }, cb) => {
     const result = roomSubmitMissionCard(code, socket.id, card);
     if (result.error) return cb?.({ error: result.error });
     syncRoom(io, code);
     cb?.({ ok: true });
   });
 
-  socket.on('game:final_guess', ({ code, guessedPlayerId }, cb) => {
+  safeOn(socket, 'game:final_guess', ({ code, guessedPlayerId }, cb) => {
     const result = roomSubmitFinalGuess(code, socket.id, guessedPlayerId);
     if (result.error) return cb?.({ error: result.error });
     syncRoom(io, code);
     cb?.({ ok: true });
   });
 
-  socket.on('game:lady_of_lake', ({ code, targetId }, cb) => {
+  safeOn(socket, 'game:lady_of_lake', ({ code, targetId }, cb) => {
     const result = roomUseLadyOfLake(code, socket.id, targetId);
     if (result.error) return cb?.({ error: result.error });
 
@@ -227,32 +258,39 @@ function registerHandlers(io, socket) {
   // ─── Disconnect ──────────────────────────────────────────────────────────
 
   socket.on('disconnect', () => {
-    const room = getRoomBySocketId(socket.id);
-    if (!room) return;
+    try {
+      const room = getRoomBySocketId(socket.id);
+      if (!room) return;
 
-    const departingPlayer = room.players.find(p => p.id === socket.id);
-    const playerName = departingPlayer?.name;
+      const departingPlayer = room.players.find(p => p.id === socket.id);
+      const playerName = departingPlayer?.name;
 
-    const inLobby = !room.game || room.game.phase === GAME_PHASES.LOBBY;
-    if (inLobby) {
-      // Lobby: actually remove them from the room
-      const result = leaveRoom(socket.id);
-      if (result && !result.disbanded) {
-        if (playerName) io.to(result.code).emit('player:left', { playerName });
-        syncRoom(io, result.code);
-      } else if (result?.disbanded) {
-        clearAfkTimer(result.code);
+      const inLobby = !room.game || room.game.phase === GAME_PHASES.LOBBY;
+      if (inLobby) {
+        // Lobby: actually remove them from the room
+        const result = leaveRoom(socket.id);
+        if (result && !result.disbanded) {
+          if (playerName) io.to(result.code).emit('player:left', { playerName });
+          syncRoom(io, result.code);
+        } else if (result?.disbanded) {
+          clearAfkTimer(result.code);
+        }
+        return;
       }
-      return;
-    }
 
-    // Game in progress: hold their seat. They can reconnect via their stored
-    // clientId (refresh or rejoining the room link). Other players see them
-    // as "(disconnected)" until they come back.
-    const updated = markDisconnected(socket.id);
-    if (updated) {
-      if (playerName) io.to(updated.code).emit('player:disconnected', { playerName });
-      syncRoom(io, updated.code);  // also schedules AFK timer if they're blocking
+      // Game in progress: hold their seat. They can reconnect via their stored
+      // clientId (refresh or rejoining the room link). Other players see them
+      // as "(disconnected)" until they come back. If they were the HOST, the
+      // AFK safety net will hand the host role to a connected player after the
+      // grace period so host-gated phases (night / mission result) can't freeze
+      // the game — see afkHandler.scheduleAfkCheck.
+      const updated = markDisconnected(socket.id);
+      if (updated) {
+        if (playerName) io.to(updated.code).emit('player:disconnected', { playerName });
+        syncRoom(io, updated.code);  // also schedules AFK timer if they're blocking
+      }
+    } catch (err) {
+      console.error('[socket:disconnect] handler error:', err);
     }
   });
 }

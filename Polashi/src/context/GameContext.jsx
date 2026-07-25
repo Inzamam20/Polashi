@@ -160,7 +160,10 @@ export function GameProvider({ children }) {
     socket.emit('game:final_guess', { code, guessedPlayerId }, cb);
   }, []);
 
-  const useLadyOfLake = useCallback((code, targetId, cb) => {
+  // NB: named without a "use" prefix on purpose — it's a socket action, not a
+  // React hook (the linter's rules-of-hooks would otherwise flag its use inside
+  // event handlers).
+  const investigateWithLady = useCallback((code, targetId, cb) => {
     socket.emit('game:lady_of_lake', { code, targetId }, cb);
   }, []);
 
@@ -196,13 +199,16 @@ export function GameProvider({ children }) {
       submitMissionCard,
       advanceFromMissionResult,
       submitFinalGuess,
-      useLadyOfLake,
+      investigateWithLady,
     }}>
       {children}
     </GameContext.Provider>
   );
 }
 
+// Intentionally co-located with the provider — this hook is the public API of
+// this context. (Fast-refresh prefers component-only files; not worth a split.)
+// eslint-disable-next-line react-refresh/only-export-components
 export function useGame() {
   const ctx = useContext(GameContext);
   if (!ctx) throw new Error('useGame must be used within GameProvider');

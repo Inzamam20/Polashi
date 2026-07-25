@@ -187,9 +187,18 @@ function proposeTeam(game, leaderId, proposedTeam) {
   if (game.phase !== GAME_PHASES.TEAM_PROPOSAL) return { error: 'Wrong phase' };
   if (game.players[game.leaderIndex].id !== leaderId) return { error: 'Not the leader' };
 
+  if (!Array.isArray(proposedTeam)) return { error: 'Invalid team' };
+
   const requiredSize = getMissionSize(game.playerCount, game.currentMissionIndex);
   if (proposedTeam.length !== requiredSize) {
     return { error: `Team must have exactly ${requiredSize} players` };
+  }
+  // Reject duplicate picks — a repeated id ([A, A, B]) would pass the size and
+  // validity checks below but then deadlock the mission forever, because the
+  // "everyone submitted" check compares Object.keys(cards).length to
+  // team.length and A can only submit one card.
+  if (new Set(proposedTeam).size !== proposedTeam.length) {
+    return { error: 'A player cannot be on the team twice' };
   }
   const validIds = new Set(game.players.map(p => p.id));
   if (!proposedTeam.every(id => validIds.has(id))) return { error: 'Invalid player IDs' };
@@ -206,9 +215,17 @@ function proposeTeam(game, leaderId, proposedTeam) {
 
 function submitVote(game, playerId, approve) {
   if (game.phase !== GAME_PHASES.VOTING) return { error: 'Wrong phase' };
+  // Only actual players in THIS game may vote. Without this, a spectator who
+  // opened the invite link could emit game:vote and either trigger the
+  // "everyone voted" check early (corrupt tally) or push the count past
+  // playerCount so it never resolves (deadlock).
+  if (!game.players.some(p => p.id === playerId)) return { error: 'Not a player in this game' };
+  if (!game.currentProposal) return { error: 'No active proposal' };
   if (game.currentProposal.votes[playerId] !== undefined) return { error: 'Already voted' };
 
-  game.currentProposal.votes[playerId] = approve;
+  // Coerce to a strict boolean — the tally uses filter(Boolean), so a truthy
+  // non-boolean from a buggy/tampered client must not be miscounted.
+  game.currentProposal.votes[playerId] = !!approve;
 
   // When everyone has voted: REVEAL the result but DON'T transition phase yet.
   // The socket handler will schedule completeVoteResolution() after a delay so
@@ -258,6 +275,11 @@ function completeVoteResolution(game) {
 
 function submitMissionCard(game, playerId, card) {
   if (game.phase !== GAME_PHASES.MISSION) return { error: 'Wrong phase' };
+  // Reject anything that isn't an exact card value. Previously only 'fail' was
+  // special-cased, so a typo/casing like 'Fail' was stored and silently counted
+  // as a success on reveal — a traitor's sabotage would vanish with no error.
+  if (card !== 'success' && card !== 'fail') return { error: 'Invalid card' };
+  if (!game.currentMission) return { error: 'No active mission' };
   if (!game.currentMission.team.includes(playerId)) return { error: 'Not on mission team' };
   if (game.currentMission.cards[playerId] !== undefined) return { error: 'Already submitted' };
 
@@ -352,8 +374,19 @@ function advanceFromMissionResult(game) {
     justCompletedIndex >= 1 &&
     game.ladyOfLakeHolder
   ) {
-    game.phase = GAME_PHASES.LADY_OF_LAKE;
-    return { ok: true, phase: 'LADY_OF_LAKE' };
+    // Only enter the phase if the holder actually has someone legal to
+    // investigate (not themselves, and not anyone who has already held the
+    // token). Otherwise there is no valid move and the phase would freeze the
+    // game forever — so we skip it and proceed to the next proposal instead.
+    const holderId = game.ladyOfLakeHolder;
+    const hasEligibleTarget = game.players.some(
+      p => p.id !== holderId && !game.ladyOfLakeUsedBy.includes(p.id)
+    );
+    if (hasEligibleTarget) {
+      game.phase = GAME_PHASES.LADY_OF_LAKE;
+      return { ok: true, phase: 'LADY_OF_LAKE' };
+    }
+    // No eligible target — fall through to the normal next-proposal path.
   }
 
   game.leaderIndex = (game.leaderIndex + 1) % game.playerCount;

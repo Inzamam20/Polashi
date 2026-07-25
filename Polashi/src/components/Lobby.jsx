@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useGame } from '../context/GameContext'
 import { BASE_ROLES_BY_COUNT, MAX_TRAITOR_SPECIALS } from '../gameRules'
 
@@ -43,7 +42,6 @@ const SPECIAL_ROLES = [
 ]
 
 export default function Lobby() {
-  const navigate = useNavigate()
   const { roomState, myId, isHost, gameMode, updateSettings, startGame, connected } = useGame()
   const [error,   setError]   = useState('')
   const [loading, setLoading] = useState(false)

@@ -4,7 +4,7 @@ import GameLayout from './GameLayout'
 import PlayerTable, { Seat } from './PlayerTable'
 
 export default function LadyOfLake() {
-  const { roomState, myId, gameMode, ladyResult, useLadyOfLake } = useGame()
+  const { roomState, myId, gameMode, ladyResult, investigateWithLady } = useGame()
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState('')
   const [selected, setSelected] = useState(null)
@@ -17,8 +17,11 @@ export default function LadyOfLake() {
   const holderName = gs?.players.find(p => p.id === holderId)?.name
   const usedByIds  = gs?.ladyOfLakeUsedBy || []
 
-  // Latch the result once it arrives.
+  // Latch the holder's investigation result into local state so it persists for
+  // the rest of this phase. This is a deliberate "copy an incoming event into
+  // state" sync — flagged by set-state-in-effect but correct and intended.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (ladyResult && amHolder && !revealed) setRevealed(ladyResult)
   }, [ladyResult, amHolder, revealed])
 
@@ -28,7 +31,7 @@ export default function LadyOfLake() {
     if (!selected || loading) return
     setLoading(true)
     setError('')
-    useLadyOfLake(roomState.code, selected, (res) => {
+    investigateWithLady(roomState.code, selected, (res) => {
       setLoading(false)
       if (res?.error) setError(res.error)
     })
