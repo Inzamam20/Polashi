@@ -11,7 +11,7 @@
 //   • Final guess  : random non-known-traitor
 
 const { GAME_PHASES, MISSION_SIZES } = require('../game/constants');
-const { getRoomByCode, getPublicRoomState, getPrivatePlayerState } = require('../rooms/roomManager');
+const { getRoomByCode, getPublicRoomState, getPrivatePlayerState, reassignHost } = require('../rooms/roomManager');
 const {
   submitVote,
   completeVoteResolution,
@@ -66,6 +66,24 @@ function waitingPlayerIds(game) {
   }
 }
 
+// Phases that only progress when the HOST presses a button (night steps,
+// mission-result "continue"). If the host is gone during one of these, no
+// player action can unstick it — so the host role must be handed off.
+function isHostGatedPhase(phase) {
+  return phase === GAME_PHASES.NIGHT || phase === GAME_PHASES.MISSION_RESULT;
+}
+
+// True when a host-gated phase is stuck because the host is disconnected, and
+// there is at least one connected player who could take over.
+function hostHandoffNeeded(room) {
+  const game = room.game;
+  if (!game || !isHostGatedPhase(game.phase)) return false;
+  const host = room.players.find(p => p.id === room.hostId);
+  const hostGone = !host || host.disconnected;
+  const someoneConnected = room.players.some(p => !p.disconnected);
+  return hostGone && someoneConnected;
+}
+
 function clearAfkTimer(code) {
   const t = afkTimers.get(code);
   if (t) {
@@ -86,10 +104,15 @@ function scheduleAfkCheck(io, code) {
     .map(id => game.players.find(p => p.id === id))
     .filter(p => p?.disconnected);
 
-  if (blockers.length === 0) return;
+  const needsHostHandoff = hostHandoffNeeded(room);
+  if (blockers.length === 0 && !needsHostHandoff) return;
 
   const deadline = Date.now() + AFK_TIMEOUT_MS;
   const blockedNames = blockers.map(p => p.name);
+  if (needsHostHandoff && blockedNames.length === 0) {
+    const host = room.players.find(p => p.id === room.hostId);
+    blockedNames.push(host?.name || 'the host');
+  }
   const handle = setTimeout(() => {
     afkTimers.delete(code);
     autoActAfkPlayers(io, code);
@@ -108,6 +131,24 @@ function autoActAfkPlayers(io, code) {
   const room = getRoomByCode(code);
   if (!room?.game || room.game.winner) return;
   const game = room.game;
+
+  // Host is gone during a host-gated phase (night / mission result). Hand the
+  // host role to a connected player so they can drive the game forward — the
+  // new host's client will show the "Next Step" / "Continue" button. This is
+  // the recovery path for a host whose device died mid-night.
+  if (hostHandoffNeeded(room)) {
+    const newHost = reassignHost(room);
+    if (newHost) {
+      io.to(code).emit('afk:auto_action', {
+        playerName: newHost.name,
+        action: 'is now the host',
+        phase: game.phase,
+      });
+    }
+    syncRoom(io, code);
+    scheduleAfkCheck(io, code);
+    return;
+  }
 
   const waiting = waitingPlayerIds(game);
   const targets = waiting

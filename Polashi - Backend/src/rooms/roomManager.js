@@ -43,6 +43,7 @@ function createRoom(hostSocketId, hostClientId, hostName, gameMode) {
     players: [host],
     game: null,
     createdAt: Date.now(),
+    lastActivityAt: Date.now(),  // bumped on every state broadcast; drives cleanup
   });
 
   return { code, room: rooms.get(code) };
@@ -136,6 +137,19 @@ function reattachByClientId(code, socketId, clientId) {
   return { room, didReattach: true };
 }
 
+// Move the host role to another player. Prefers a currently-connected player
+// so the new host can actually act; falls back to the first remaining player.
+// Updates BOTH hostId and hostClientId — the clientId is what reconnection
+// matches on, so without updating it a promoted host would silently lose their
+// powers (and nobody could start/advance) after their next refresh.
+function reassignHost(room) {
+  const next = room.players.find(p => !p.disconnected) || room.players[0];
+  if (!next) return null;
+  room.hostId = next.id;
+  room.hostClientId = next.clientId;
+  return next;
+}
+
 function leaveRoom(socketId) {
   for (const [code, room] of rooms.entries()) {
     const idx = room.players.findIndex(p => p.id === socketId);
@@ -150,12 +164,40 @@ function leaveRoom(socketId) {
 
     // Transfer host if needed
     if (room.hostId === socketId) {
-      room.hostId = room.players[0].id;
+      reassignHost(room);
     }
 
     return { code, room, disbanded: false };
   }
   return null;
+}
+
+// ─── Stale-room cleanup ──────────────────────────────────────────────────────
+// Rooms live only in this in-memory Map, and nothing removed them once a game
+// finished or was abandoned mid-play — so they'd accumulate until the process
+// restarted (a slow memory leak). This reaps rooms that are safe to drop.
+const ABANDONED_ROOM_MS = 15 * 60 * 1000;  // nobody connected for 15 min
+const FINISHED_ROOM_MS  = 30 * 60 * 1000;  // game over + idle for 30 min
+
+// Returns the codes of the rooms that were deleted, so the caller can clear any
+// associated timers (e.g. AFK). Never deletes a room that still has a connected
+// player and isn't finished — so a quiet lobby of waiting friends is safe.
+function sweepStaleRooms(now = Date.now()) {
+  const removed = [];
+  for (const [code, room] of rooms.entries()) {
+    const idleMs = now - (room.lastActivityAt || room.createdAt || now);
+    const anyConnected = room.players.some(p => !p.disconnected);
+    const isFinished = room.game && room.game.phase === GAME_PHASES.GAME_OVER;
+
+    const abandoned = !anyConnected && idleMs > ABANDONED_ROOM_MS;
+    const finishedAndIdle = isFinished && idleMs > FINISHED_ROOM_MS;
+
+    if (abandoned || finishedAndIdle) {
+      rooms.delete(code);
+      removed.push(code);
+    }
+  }
+  return removed;
 }
 
 function getRoomByCode(code) {
@@ -257,6 +299,11 @@ function roomAdvanceFromNight(code, hostId) {
 function getPublicRoomState(code) {
   const room = rooms.get(code);
   if (!room) return null;
+  // Every state broadcast and every state query flows through here, so this is
+  // the single reliable place to record "this room is still alive" for the
+  // stale-room sweep (see sweepStaleRooms). An abandoned/finished game stops
+  // producing broadcasts, so its timestamp stops advancing and it gets reaped.
+  room.lastActivityAt = Date.now();
   return {
     code: room.code,
     hostId: room.hostId,
@@ -283,6 +330,8 @@ module.exports = {
   createRoom,
   joinRoom,
   leaveRoom,
+  reassignHost,
+  sweepStaleRooms,
   markDisconnected,
   reattachByClientId,
   getRoomByCode,

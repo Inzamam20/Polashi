@@ -12,12 +12,12 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
 // the same seat" trap that localStorage would create.
 function getClientId() {
   let id = null
-  try { id = sessionStorage.getItem('polashiClientId') } catch {}
+  try { id = sessionStorage.getItem('polashiClientId') } catch { /* storage blocked (private mode) — ignore */ }
   if (!id) {
     id = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
       : `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
-    try { sessionStorage.setItem('polashiClientId', id) } catch {}
+    try { sessionStorage.setItem('polashiClientId', id) } catch { /* storage blocked (private mode) — ignore */ }
   }
   return id
 }

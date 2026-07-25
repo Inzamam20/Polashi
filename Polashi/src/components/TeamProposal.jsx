@@ -29,8 +29,13 @@ export default function TeamProposal() {
   // game starts. Also broadcast the (now empty) preview so other players
   // don't see stale markers.
   useEffect(() => {
+    // Reset the leader's in-progress selection whenever the round changes (new
+    // leader or new mission). These resets are the intended behavior; the
+    // set-state-in-effect rule is advisory here.
+    /* eslint-disable react-hooks/set-state-in-effect */
     setSelected([])
     setError('')
+    /* eslint-enable react-hooks/set-state-in-effect */
     // Don't broadcast on the very first mount if we're not the leader; only
     // the leader needs to clear other players' previews.
     if (amLeader && roomState?.code) {

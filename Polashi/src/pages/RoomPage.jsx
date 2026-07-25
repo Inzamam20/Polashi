@@ -45,9 +45,10 @@ export default function RoomPage() {
   // Fetch room state when this page first opens (works for refresh AND invite link).
   useEffect(() => {
     if (!connected || !code) return
-    setFetchError('')
+    // Clear/set the error inside the async callback (not synchronously in the
+    // effect body) — same result, avoids a redundant re-render.
     getRoomState(code, (res) => {
-      if (res?.error) setFetchError(res.error)
+      setFetchError(res?.error || '')
     })
   }, [connected, code, getRoomState])
 
